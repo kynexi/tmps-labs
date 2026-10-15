@@ -25,6 +25,10 @@ public class Transaction {
         return type;
     }
 
+    public String getCategory(){
+        return category;
+    }
+
     public double getAmount() {
         return amount;
     }

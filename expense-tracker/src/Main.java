@@ -4,29 +4,24 @@ public class Main {
     public static void main(String[] args) {
         Transaction t1 = new Transaction(80, "fidesco", TransactionType.INCOME, "16/09/2026", "entertaimanet");
         Transaction t2 = new Transaction(50, "gambling", TransactionType.EXPENSE, "16/09/2026", "entertaimanet");
+        Transaction t3 = new Transaction(45, "gambling", TransactionType.EXPENSE, "16/09/2026", "entertaimanet" );
 
-        ArrayList<Transaction> transactions = new ArrayList<>();
-        transactions.add(t1);
-        transactions.add(t2);
+        TransactionService transactions = new TransactionService();
+        transactions.addTransaction(t1);
+        transactions.addTransaction(t2);
+        transactions.addTransaction(t3);
 
-        for (Transaction t : transactions) {
-            System.out.println("--");
+
+        System.out.println("Balance: " + transactions.getBalance());
+        System.out.println();
+
+        for(Transaction t: transactions.getTransactions()) {
             t.display();
             System.out.println();
         }
 
-        double balance = 0;
-
-        for (Transaction t : transactions) {
-            if (t.getType() == TransactionType.INCOME) {
-                balance += t.getAmount();
-            }
-            else if (t.getType() == TransactionType.EXPENSE) {
-                balance -= t.getAmount();
-            }
-        }
-
-        System.out.println(balance);
+        transactions.getExpensesByCategory("entertaimanet");
+        transactions.getIncomeByCategory("entertaimanet");
 
     }
 }
