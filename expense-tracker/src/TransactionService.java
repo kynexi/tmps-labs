@@ -1,74 +1,38 @@
 import java.util.ArrayList;
+import java.util.List;
+
+// Transaction management: add, delete, list, filter.
+// No printing and no data (SRP + DIP).
 
 public class TransactionService {
-    private ArrayList<Transaction> transactions = new ArrayList<>();
+    private final TransactionRepository repository;
 
-    public ArrayList<Transaction> getTransactions() {
-        return transactions;
+    public TransactionService(TransactionRepository repository) {
+        this.repository = repository;
     }
 
     public void addTransaction(Transaction transaction) {
-        transactions.add(transaction);
+        repository.add(transaction);
     }
 
     public void removeTransaction(int index) {
-        transactions.remove(index);
+        if (index < 0 || index >= repository.findAll().size()) {
+            throw new IllegalArgumentException("There is no transaction with that number.");
+        }
+        repository.remove(index);
     }
 
-    public double getTotalIncome() {
-        double income = 0;
-        for (Transaction t : transactions) {
-            if (t.getType() == TransactionType.INCOME) {
-                income += t.getAmount();
+    public List<Transaction> getTransactions() {
+        return repository.findAll();
+    }
+
+    public List<Transaction> filter(TransactionFilter filter) {
+        List<Transaction> result = new ArrayList<>();
+        for (Transaction t : repository.findAll()) {
+            if (filter.matches(t)) {
+                result.add(t);
             }
         }
-        return income;
+        return result;
     }
-
-    public double getTotalExpense() {
-        double expense = 0;
-        for (Transaction t : transactions) {
-            if (t.getType() == TransactionType.EXPENSE) {
-                expense += t.getAmount();
-            }
-        }
-        return expense;
-    }
-
-    public double getBalance() {
-        double balance = 0;
-        for (Transaction t : transactions) {
-            if (t.getType() == TransactionType.INCOME) {
-                balance += t.getAmount();
-            }
-            else if (t.getType() == TransactionType.EXPENSE) {
-                balance -= t.getAmount();
-            }
-        }
-        return balance;
-    }
-
-    public double getExpensesByCategory(String Category){
-        double expense = 0;
-        for (Transaction t : transactions) {
-            if (t.getCategory().equals(Category) && t.getType() == TransactionType.EXPENSE) {
-                expense += t.getAmount();
-            }
-        }
-        System.out.println("Expenses by Category: " + Category + " = " + expense);
-        return expense;
-    }
-
-    public double getIncomeByCategory(String Category){
-        double income = 0;
-        for (Transaction t : transactions) {
-            if (t.getCategory().equals(Category) && t.getType() == TransactionType.INCOME) {
-                income += t.getAmount();
-            }
-        }
-        System.out.println("Income by Category: " + Category + " = " + income);
-        return income;
-    }
-
-
 }
