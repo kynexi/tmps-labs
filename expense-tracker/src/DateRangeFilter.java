@@ -1,6 +1,6 @@
 import java.time.LocalDate;
 
-/** Matches transactions between two dates, both ends included. */
+// Matches transactions between two dates, both ends included.
 public class DateRangeFilter implements TransactionFilter {
     private final LocalDate from;
     private final LocalDate to;
