@@ -6,5 +6,6 @@ public class Main {
         SummaryService summaryService = new SummaryService(repository);
 
         new ConsoleMenu(transactionService, summaryService).run();
+
     }
 }

@@ -15,6 +15,7 @@ public class ConsoleMenu {
     private final TransactionService transactionService;
     private final SummaryService summaryService;
     private final Scanner scanner = new Scanner(System.in);
+    private final AppSettings settings = AppSettings.getInstance();
 
     public ConsoleMenu(TransactionService transactionService, SummaryService summaryService) {
         this.transactionService = transactionService;
