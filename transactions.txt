@@ -1,0 +1,14 @@
+2026-10-01	INCOME	18000.0	salary	October salary
+2026-10-02	EXPENSE	5500.0	rent	Apartment rent
+2026-10-03	EXPENSE	420.5	food	Groceries at Linella
+2026-10-05	EXPENSE	150.0	transport	Monthly trolleybus pass
+2026-10-06	EXPENSE	89.9	food	Lunch with colleagues
+2026-10-08	INCOME	1200.0	freelance	Website mockup for a client
+2026-10-10	EXPENSE	310.0	utilities	Electricity and water
+2026-10-12	EXPENSE	199.0	entertainment	Cinema and dinner
+2026-10-15	EXPENSE	650.0	health	Dentist appointment
+2026-10-18	EXPENSE	275.75	food	Weekend market
+2026-10-20	EXPENSE	480.0	clothing	Winter jacket
+2026-10-22	INCOME	300.0	gift	Birthday gift from family
+2026-10-25	EXPENSE	120.0	transport	Taxi to the airport
+2026-10-28	EXPENSE	64.5	food	Coffee and pastries
