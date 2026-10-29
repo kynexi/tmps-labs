@@ -1,7 +1,14 @@
 package app;
 
+import config.AppSettings;
+import export.*;
+import filter.*;
+import model.*;
+import service.*;
 import java.io.UncheckedIOException;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
@@ -45,7 +52,6 @@ public class ConsoleMenu {
                 // invalid input from the user: show the message and go back to the menu
                 System.out.println("Error: " + e.getMessage());
             } catch (UncheckedIOException e) {
-                // problem with a file (save, load or export)
                 System.out.println("File error: " + e.getMessage());
             }
         }
@@ -117,4 +123,107 @@ public class ConsoleMenu {
     }
 
     private void filterTransactions() {
-        System.out.println("Filter by: 1) category  2) income/expense  3) date range  4) word in description  5)
+        System.out.println("Filter by: 1) category  2) income/expense  3) date range  4) word in description  5) amount range");
+        String choice = ask("Choose: ");
+
+        TransactionFilter filter = switch (choice) {
+            case "1" -> new CategoryFilter(ask("Category: "));
+            case "2" -> new TypeFilter(readType());
+            case "3" -> new DateRangeFilter(
+                    parseDate(ask("From dd/MM/yyyy: ")),
+                    parseDate(ask("To dd/MM/yyyy: ")));
+            case "4" -> new KeywordFilter(ask("Word: "));
+            case "5" -> new AmountFilter(
+                    parseAmount(ask("Min amount: ")),
+                    parseAmount(ask("Max amount: ")));
+            default -> throw new IllegalArgumentException("Unknown filter.");
+        };
+
+        // numbers are not shown here, because they would not match the numbers used for deleting
+        printTransactions(transactionService.filter(filter), false);
+    }
+
+    private void exportTransactions() {
+        String choice = ask("Export format: 1) CSV  2) TXT: ").trim();
+
+        // FACTORY METHOD in use: we pick a creator, it makes the right exporter by itself
+        ExportCreator creator = switch (choice) {
+            case "1" -> new CsvExportCreator();
+            case "2" -> new TextExportCreator();
+            default -> throw new IllegalArgumentException("Unknown format.");
+        };
+
+        String fileName = creator.exportToFile(transactionService.getTransactions(), "export");
+        System.out.println("Saved to " + fileName);
+    }
+
+    private void changeSettings() {
+        System.out.println("Currency: " + settings.getCurrency()
+                + " | Default category: " + settings.getDefaultCategory());
+        String choice = ask("Change: 1) currency  2) default category  (empty = back): ").trim();
+        switch (choice) {
+            case "1" -> settings.setCurrency(ask("New currency (e.g. MDL, EUR, USD): "));
+            case "2" -> settings.setDefaultCategory(ask("New default category: "));
+            default -> {
+            }
+        }
+    }
+
+    // ---------- printing ----------
+
+    private void printTransactions(List<Transaction> list, boolean numbered) {
+        if (list.isEmpty()) {
+            System.out.println("No transactions.");
+            return;
+        }
+        for (int i = 0; i < list.size(); i++) {
+            Transaction t = list.get(i);
+            String prefix = numbered ? (i + 1) + "." : "-";
+            System.out.printf("%s %s | %-7s | %9.2f %s | %s | %s%n",
+                    prefix, t.getDate().format(DATE_FORMAT), t.getType(), t.getAmount(),
+                    settings.getCurrency(), t.getCategory(), t.getDescription());
+        }
+    }
+
+    // ---------- reading input ----------
+
+    private String ask(String question) {
+        System.out.print(question);
+        return scanner.nextLine();
+    }
+
+    private TransactionType readType() {
+        String answer = ask("Type (1 = income, 2 = expense): ").trim();
+        if (answer.equals("1")) {
+            return TransactionType.INCOME;
+        }
+        if (answer.equals("2")) {
+            return TransactionType.EXPENSE;
+        }
+        throw new IllegalArgumentException("Type must be 1 or 2.");
+    }
+
+    private double parseAmount(String text) {
+        try {
+            return Double.parseDouble(text.trim().replace(',', '.')); // accept 12,5 and 12.5
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Amount must be a number.");
+        }
+    }
+
+    private int parseNumber(String text) {
+        try {
+            return Integer.parseInt(text.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Please enter a whole number.");
+        }
+    }
+
+    private LocalDate parseDate(String text) {
+        try {
+            return LocalDate.parse(text.trim(), DATE_FORMAT);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("Date must look like 16/09/2026.");
+        }
+    }
+}

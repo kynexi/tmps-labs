@@ -1,4 +1,7 @@
 package service;
+import model.Transaction;
+import model.TransactionType;
+import repository.TransactionRepository;
 
 import model.Transaction;
 import model.TransactionType;

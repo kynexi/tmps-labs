@@ -25,10 +25,12 @@ Before: `TransactionService` had three jobs: storing transactions, calculating
 totals, and printing to the console. `Transaction` also printed itself with `display()`.
 
 ```java
+import model.Transaction;
+
 // old TransactionService
-public double getExpensesByCategory(String Category){
+public double getExpensesByCategory(String Category) {
     double expense = 0;
-    for (Transaction t : transactions) { ... }                                   // calculation
+    for (Transaction t : transactions) { ...}                                   // calculation
     System.out.println("Expenses by Category: " + Category + " = " + expense);   // printing
     return expense;
 }
@@ -65,6 +67,8 @@ mean even more methods.
 After: One interface describes a rule: "does this transaction match?"
 
 ```java
+import model.Transaction;
+
 public interface TransactionFilter {
     boolean matches(Transaction transaction);
 }
@@ -73,13 +77,16 @@ public interface TransactionFilter {
 Each filter is a small class that implements it:
 
 ```java
+import filter.TransactionFilter;
+import model.Transaction;
+
 public class CategoryFilter implements TransactionFilter {
     private final String category;
- 
+
     public CategoryFilter(String category) {
         this.category = category.trim();
     }
- 
+
     @Override
     public boolean matches(Transaction transaction) {
         return transaction.getCategory().equalsIgnoreCase(category);
@@ -91,6 +98,10 @@ public class CategoryFilter implements TransactionFilter {
 accepts any of them:
 
 ```java
+import filter.CategoryFilter;
+import filter.TransactionFilter;
+import model.Transaction;
+
 public List<Transaction> filter(TransactionFilter filter) {
     List<Transaction> result = new ArrayList<>();
     for (Transaction t : repository.findAll()) {
@@ -100,9 +111,11 @@ public List<Transaction> filter(TransactionFilter filter) {
     }
     return result;
 }
- 
+
 // usage
-transactionService.filter(new CategoryFilter("food"));
+transactionService.
+
+filter(new CategoryFilter("food"));
 ```
 
 Thus, to add "filter by amount" I only write `AmountFilter implements TransactionFilter`.
@@ -126,6 +139,8 @@ on abstractions.
 Before = The high-level class names the low-level detail directly:
 
 ```java
+import model.Transaction;
+
 // TransactionService
 private ArrayList<Transaction> transactions = new ArrayList<>();
 ```
@@ -133,18 +148,24 @@ private ArrayList<Transaction> transactions = new ArrayList<>();
 After = An interface sits in the middle, and both sides depend on it:
 
 ```java
+import model.Transaction;
+
 // the abstraction
+
 public interface TransactionRepository {
     void add(Transaction transaction);
+
     void remove(int index);
+
     List<Transaction> findAll();
 }
- 
+
 // low-level: follows the interface
-public class InMemoryTransactionRepository implements TransactionRepository { ... }
- 
+public class InMemoryTransactionRepository implements repository.TransactionRepository { ...
+}
+
 // high-level: only knows the interface
-public TransactionService(TransactionRepository repository) {
+public TransactionService(repository.TransactionRepository repository) {
     this.repository = repository;
 }
 ```
@@ -153,6 +174,11 @@ public TransactionService(TransactionRepository repository) {
 `Main` creates the real class and passes it in, so the services never name it:
 
 ```java
+import repository.InMemoryTransactionRepository;
+import repository.TransactionRepository;
+import service.SummaryService;
+import service.TransactionService;
+
 TransactionRepository repository = new InMemoryTransactionRepository();
 TransactionService transactionService = new TransactionService(repository);
 SummaryService summaryService = new SummaryService(repository);

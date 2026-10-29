@@ -1,4 +1,8 @@
 package app;
+import repository.FileTransactionRepository;
+import repository.TransactionRepository;
+import service.SummaryService;
+import service.TransactionService;
 
 public class Main {
     public static void main(String[] args) {
