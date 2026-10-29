@@ -1,3 +1,7 @@
+package filter;
+
+import model.Transaction;
+
 public class KeywordFilter implements TransactionFilter {
     private final String keyword;
     public KeywordFilter(String keyword) { this.keyword = keyword.trim().toLowerCase(); }

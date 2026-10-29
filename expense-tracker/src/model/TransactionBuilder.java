@@ -1,3 +1,7 @@
+package model;
+
+import java.time.LocalDate;
+
 public class TransactionBuilder {
     private double amount;
     private String description;

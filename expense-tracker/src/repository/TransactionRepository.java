@@ -1,3 +1,7 @@
+package repository;
+
+import model.Transaction;
+
 import java.util.List;
 
 // Interface for "where transactions are stored".

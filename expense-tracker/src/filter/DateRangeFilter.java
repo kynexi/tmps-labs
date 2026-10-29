@@ -1,3 +1,7 @@
+package filter;
+
+import model.Transaction;
+
 import java.time.LocalDate;
 
 // Matches transactions between two dates, both ends included.

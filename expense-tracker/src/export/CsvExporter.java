@@ -1,3 +1,9 @@
+package export;
+
+import model.Transaction;
+
+import java.util.List;
+
 public class CsvExporter implements Exporter {
     public String format(List<Transaction> list) {
         StringBuilder sb = new StringBuilder("date,type,amount,category,description\n");

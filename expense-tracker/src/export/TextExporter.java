@@ -1,3 +1,9 @@
+package export;
+
+import model.Transaction;
+
+import java.util.List;
+
 public class TextExporter implements Exporter {
     public String format(List<Transaction> list) {
         StringBuilder sb = new StringBuilder("Finance Tracker report\n----------------------\n");

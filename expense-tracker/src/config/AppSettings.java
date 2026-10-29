@@ -1,3 +1,5 @@
+package config;
+
 public class AppSettings {
     // singleton pattern : one shared settings object
     private static final AppSettings INSTANCE = new AppSettings();

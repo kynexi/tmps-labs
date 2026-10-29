@@ -1,3 +1,7 @@
+package filter;
+
+import model.Transaction;
+
 public class CategoryFilter implements TransactionFilter {
     private final String category;
 

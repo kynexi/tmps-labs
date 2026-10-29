@@ -1,3 +1,8 @@
+package service;
+
+import model.Transaction;
+import model.TransactionType;
+
 import java.util.Map;
 import java.util.TreeMap;
 

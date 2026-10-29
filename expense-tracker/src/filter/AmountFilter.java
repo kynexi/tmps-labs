@@ -1,3 +1,7 @@
+package filter;
+
+import model.Transaction;
+
 public class AmountFilter implements TransactionFilter {
     private final double min, max;
     public AmountFilter(double min, double max) {

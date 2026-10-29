@@ -1,3 +1,7 @@
+package repository;
+
+import model.Transaction;
+
 import java.util.ArrayList;
 import java.util.List;
 

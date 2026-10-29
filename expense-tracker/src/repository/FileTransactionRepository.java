@@ -1,3 +1,16 @@
+package repository;
+
+import model.Transaction;
+import model.TransactionType;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+
 public class FileTransactionRepository implements TransactionRepository {
     private final List<Transaction> transactions = new ArrayList<>();
     private final Path file;
