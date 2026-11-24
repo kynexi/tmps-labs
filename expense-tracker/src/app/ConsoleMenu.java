@@ -2,9 +2,16 @@ package app;
 
 import config.AppSettings;
 import export.*;
+import facade.FinanceFacade;
+import facade.ImportResult;
 import filter.*;
+import filter.composite.AndFilter;
+import filter.composite.FilterGroup;
+import filter.composite.OrFilter;
+import importer.adapter.BankStatementCsvAdapter;
 import model.*;
 import service.*;
+
 import java.io.UncheckedIOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -15,18 +22,20 @@ import java.util.Scanner;
 
 /**
  * The only class that talks to the user (Scanner + System.out).
- * All the real work is delegated to the services.
+ * All the real work is delegated to the services and the facade.
  */
 public class ConsoleMenu {
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
+    private final FinanceFacade facade;
     private final TransactionService transactionService;
     private final SummaryService summaryService;
     private final Scanner scanner = new Scanner(System.in);
     // SINGLETON in use: the same settings object everywhere
     private final AppSettings settings = AppSettings.getInstance();
 
-    public ConsoleMenu(TransactionService transactionService, SummaryService summaryService) {
+    public ConsoleMenu(FinanceFacade facade, TransactionService transactionService, SummaryService summaryService) {
+        this.facade = facade;
         this.transactionService = transactionService;
         this.summaryService = summaryService;
     }
@@ -45,11 +54,12 @@ public class ConsoleMenu {
                     case "5" -> filterTransactions();
                     case "6" -> exportTransactions();
                     case "7" -> changeSettings();
+                    case "8" -> importStatement();
                     case "0" -> running = false;
                     default -> System.out.println("Unknown option.");
                 }
             } catch (IllegalArgumentException e) {
-                // invalid input from the user: show the message and go back to the menu
+                // invalid input or a rule broken (e.g. budget exceeded): show the message and go back
                 System.out.println("Error: " + e.getMessage());
             } catch (UncheckedIOException e) {
                 System.out.println("File error: " + e.getMessage());
@@ -68,6 +78,7 @@ public class ConsoleMenu {
         System.out.println("5. Filter transactions");
         System.out.println("6. Export to file");
         System.out.println("7. Settings");
+        System.out.println("8. Import bank statement (CSV)");
         System.out.println("0. Exit");
         System.out.print("Choose: ");
     }
@@ -90,6 +101,7 @@ public class ConsoleMenu {
                 .date(dateText.isBlank() ? null : parseDate(dateText))
                 .build();
 
+        // goes through the DECORATORS (log + budget check) without the menu knowing
         transactionService.addTransaction(transaction);
         System.out.println("Transaction added.");
     }
@@ -123,37 +135,30 @@ public class ConsoleMenu {
     }
 
     private void filterTransactions() {
-        System.out.println("Filter by: 1) category  2) income/expense  3) date range  4) word in description  5) amount range");
-        String choice = ask("Choose: ");
-
-        TransactionFilter filter = switch (choice) {
-            case "1" -> new CategoryFilter(ask("Category: "));
-            case "2" -> new TypeFilter(readType());
-            case "3" -> new DateRangeFilter(
-                    parseDate(ask("From dd/MM/yyyy: ")),
-                    parseDate(ask("To dd/MM/yyyy: ")));
-            case "4" -> new KeywordFilter(ask("Word: "));
-            case "5" -> new AmountFilter(
-                    parseAmount(ask("Min amount: ")),
-                    parseAmount(ask("Max amount: ")));
-            default -> throw new IllegalArgumentException("Unknown filter.");
-        };
-
+        TransactionFilter filter = readFilter();
         // numbers are not shown here, because they would not match the numbers used for deleting
-        printTransactions(transactionService.filter(filter), false);
+        printTransactions(facade.search(filter), false);
     }
 
     private void exportTransactions() {
-        String choice = ask("Export format: 1) CSV  2) TXT: ").trim();
+        String what = ask("Export: 1) all transactions  2) only filtered: ").trim();
+        // an empty AND group matches everything, so "all" is just another filter
+        TransactionFilter filter = switch (what) {
+            case "1" -> new AndFilter();
+            case "2" -> readFilter();
+            default -> throw new IllegalArgumentException("Choose 1 or 2.");
+        };
 
+        String format = ask("Export format: 1) CSV  2) TXT: ").trim();
         // FACTORY METHOD in use: we pick a creator, it makes the right exporter by itself
-        ExportCreator creator = switch (choice) {
+        ExportCreator creator = switch (format) {
             case "1" -> new CsvExportCreator();
             case "2" -> new TextExportCreator();
             default -> throw new IllegalArgumentException("Unknown format.");
         };
 
-        String fileName = creator.exportToFile(transactionService.getTransactions(), "export");
+        // FACADE: filter (COMPOSITE) -> export (FACTORY METHOD) in one call
+        String fileName = facade.exportMatching(filter, creator, "export");
         System.out.println("Saved to " + fileName);
     }
 
@@ -167,6 +172,60 @@ public class ConsoleMenu {
             default -> {
             }
         }
+    }
+
+    // FACADE + ADAPTER in use: the bank file is read by Apache Commons CSV behind the adapter
+    private void importStatement() {
+        String path = ask("Path to bank CSV (e.g. samples/bank-statement.csv): ").trim();
+        ImportResult result = facade.importFrom(BankStatementCsvAdapter.fromFile(path));
+        System.out.println("Imported: " + result.imported());
+        if (!result.rejected().isEmpty()) {
+            System.out.println("Skipped: " + result.rejected().size());
+            for (String r : result.rejected()) {
+                System.out.println("  - " + r);
+            }
+        }
+    }
+
+    // ---------- filters ----------
+
+    private TransactionFilter readFilter() {
+        System.out.println("Filter by: 1) category  2) income/expense  3) date range  4) word in description"
+                + "  5) amount range  6) combine several (AND / OR)");
+        String choice = ask("Choose: ").trim();
+
+        return switch (choice) {
+            case "1" -> new CategoryFilter(ask("Category: "));
+            case "2" -> new TypeFilter(readType());
+            case "3" -> new DateRangeFilter(
+                    parseDate(ask("From dd/MM/yyyy: ")),
+                    parseDate(ask("To dd/MM/yyyy: ")));
+            case "4" -> new KeywordFilter(ask("Word: "));
+            case "5" -> new AmountFilter(
+                    parseAmount(ask("Min amount: ")),
+                    parseAmount(ask("Max amount: ")));
+            case "6" -> readFilterGroup();
+            default -> throw new IllegalArgumentException("Unknown filter.");
+        };
+    }
+
+    // COMPOSITE in use: a group is built from filters, and a filter can again be a group
+    private TransactionFilter readFilterGroup() {
+        String mode = ask("Combine with 1) AND (all must match)  2) OR (any can match): ").trim();
+        FilterGroup group = switch (mode) {
+            case "1" -> new AndFilter();
+            case "2" -> new OrFilter();
+            default -> throw new IllegalArgumentException("Choose 1 or 2.");
+        };
+        int count = parseNumber(ask("How many filters in the group? "));
+        if (count < 2) {
+            throw new IllegalArgumentException("A group needs at least 2 filters.");
+        }
+        for (int i = 1; i <= count; i++) {
+            System.out.println("-- filter " + i + " of " + count + " --");
+            group.add(readFilter()); // choosing 6 here creates a nested group
+        }
+        return group;
     }
 
     // ---------- printing ----------

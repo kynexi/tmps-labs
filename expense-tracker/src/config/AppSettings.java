@@ -4,7 +4,7 @@ public class AppSettings {
     // singleton pattern : one shared settings object
     private static final AppSettings INSTANCE = new AppSettings();
 
-    private String currency = "MDL";
+    private String currency = "EUR";
     private String defaultCategory = "general";
 
     // private, nobody can write new appsettings

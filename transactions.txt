@@ -12,3 +12,8 @@
 2026-10-22	INCOME	300.0	gift	Birthday gift from family
 2026-10-25	EXPENSE	120.0	transport	Taxi to the airport
 2026-10-28	EXPENSE	64.5	food	Coffee and pastries
+2026-10-30	INCOME	100.0	general	miau
+2026-11-01	INCOME	18000.0	general	Salariu noiembrie
+2026-11-02	EXPENSE	5500.0	general	Chirie noiembrie
+2026-11-03	EXPENSE	342.75	general	Linella Botanica
+2026-11-05	EXPENSE	150.0	general	Orange abonament
