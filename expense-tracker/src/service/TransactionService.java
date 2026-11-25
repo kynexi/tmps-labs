@@ -43,4 +43,18 @@ public class TransactionService {
         }
         return result;
     }
+
+    public Transaction getTransaction(int index) {
+        List<Transaction> all = repository.findAll();
+        if (index < 0 || index >= all.size()) {
+            throw new IllegalArgumentException("There is no transaction with that number.");
+        }
+        return all.get(index);
+    }
+
+    public void removeTransaction(Transaction transaction) {
+        int index = repository.findAll().indexOf(transaction);   // same object, Transaction has no equals()
+        if (index < 0) throw new IllegalArgumentException("Transaction not found.");
+        repository.remove(index);
+    }
 }

@@ -1,5 +1,12 @@
 package app;
 
+import categorization.CategoryChain;
+import categorization.CategoryRequest;
+import categorization.KeywordCategoryHandler;
+import command.AddTransactionCommand;
+import command.CommandHistory;
+import command.DeleteTransactionCommand;
+import command.ImportStatementCommand;
 import config.AppSettings;
 import export.*;
 import facade.FinanceFacade;
@@ -10,6 +17,8 @@ import filter.composite.FilterGroup;
 import filter.composite.OrFilter;
 import importer.adapter.BankStatementCsvAdapter;
 import model.*;
+import observer.TransactionListener;
+import observer.TransactionPublisher;
 import service.*;
 
 import java.io.UncheckedIOException;
@@ -22,7 +31,7 @@ import java.util.Scanner;
 
 /**
  * The only class that talks to the user (Scanner + System.out).
- * All the real work is delegated to the services and the facade.
+ * All the real work is delegated to the services, the facade and the commands.
  */
 public class ConsoleMenu {
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -30,14 +39,28 @@ public class ConsoleMenu {
     private final FinanceFacade facade;
     private final TransactionService transactionService;
     private final SummaryService summaryService;
+    private final CommandHistory history;
+    private final TransactionPublisher publisher;
+    private final CategoryChain categories;
+    private final TransactionListener largeExpenseAlert;
+    private final TransactionListener budgetWarning;
+    private boolean alertsOn = true;   // Main subscribes both listeners at start
+
     private final Scanner scanner = new Scanner(System.in);
     // SINGLETON in use: the same settings object everywhere
     private final AppSettings settings = AppSettings.getInstance();
 
-    public ConsoleMenu(FinanceFacade facade, TransactionService transactionService, SummaryService summaryService) {
+    public ConsoleMenu(FinanceFacade facade, TransactionService transactionService, SummaryService summaryService,
+                       CommandHistory history, TransactionPublisher publisher, CategoryChain categories,
+                       TransactionListener largeExpenseAlert, TransactionListener budgetWarning) {
         this.facade = facade;
         this.transactionService = transactionService;
         this.summaryService = summaryService;
+        this.history = history;
+        this.publisher = publisher;
+        this.categories = categories;
+        this.largeExpenseAlert = largeExpenseAlert;
+        this.budgetWarning = budgetWarning;
     }
 
     public void run() {
@@ -55,6 +78,8 @@ public class ConsoleMenu {
                     case "6" -> exportTransactions();
                     case "7" -> changeSettings();
                     case "8" -> importStatement();
+                    case "9" -> System.out.println("Undone: " + history.undo());
+                    case "10" -> System.out.println("Redone: " + history.redo());
                     case "0" -> running = false;
                     default -> System.out.println("Unknown option.");
                 }
@@ -79,6 +104,8 @@ public class ConsoleMenu {
         System.out.println("6. Export to file");
         System.out.println("7. Settings");
         System.out.println("8. Import bank statement (CSV)");
+        System.out.println("9. Undo");
+        System.out.println("10. Redo");
         System.out.println("0. Exit");
         System.out.print("Choose: ");
     }
@@ -89,10 +116,15 @@ public class ConsoleMenu {
         TransactionType type = readType();
         double amount = parseAmount(ask("Amount: "));
         String description = ask("Description: ");
-        String category = ask("Category (empty = " + settings.getDefaultCategory() + "): ");
+        String category = ask("Category (empty = automatic): ");
         String dateText = ask("Date dd/MM/yyyy (empty = today): ");
 
-        // BUILDER in use: each value has a name, empty category/date get the defaults
+        // CHAIN OF RESPONSIBILITY: no category typed -> the chain picks one
+        if (category.isBlank()) {
+            category = categories.resolve(new CategoryRequest(description, amount, type));
+        }
+
+        // BUILDER in use
         Transaction transaction = new TransactionBuilder()
                 .type(type)
                 .amount(amount)
@@ -101,9 +133,9 @@ public class ConsoleMenu {
                 .date(dateText.isBlank() ? null : parseDate(dateText))
                 .build();
 
-        // goes through the DECORATORS (log + budget check) without the menu knowing
-        transactionService.addTransaction(transaction);
-        System.out.println("Transaction added.");
+        // COMMAND: goes into the history, so it can be undone
+        history.execute(new AddTransactionCommand(facade, transaction));
+        System.out.println("Transaction added (category: " + transaction.getCategory() + ").");
     }
 
     private void deleteTransaction() {
@@ -114,8 +146,8 @@ public class ConsoleMenu {
         }
         printTransactions(all, true);
         int number = parseNumber(ask("Number to delete: "));
-        transactionService.removeTransaction(number - 1); // the user sees 1-based numbers
-        System.out.println("Transaction deleted.");
+        history.execute(new DeleteTransactionCommand(facade, number - 1)); // the user sees 1-based numbers
+        System.out.println("Transaction deleted. (Undo with 9)");
     }
 
     private void showSummary() {
@@ -150,35 +182,66 @@ public class ConsoleMenu {
         };
 
         String format = ask("Export format: 1) CSV  2) TXT: ").trim();
-        // FACTORY METHOD in use: we pick a creator, it makes the right exporter by itself
+        // FACTORY METHOD in use
         ExportCreator creator = switch (format) {
             case "1" -> new CsvExportCreator();
             case "2" -> new TextExportCreator();
             default -> throw new IllegalArgumentException("Unknown format.");
         };
 
-        // FACADE: filter (COMPOSITE) -> export (FACTORY METHOD) in one call
         String fileName = facade.exportMatching(filter, creator, "export");
         System.out.println("Saved to " + fileName);
     }
 
     private void changeSettings() {
         System.out.println("Currency: " + settings.getCurrency()
-                + " | Default category: " + settings.getDefaultCategory());
-        String choice = ask("Change: 1) currency  2) default category  (empty = back): ").trim();
+                + " | Default category: " + settings.getDefaultCategory()
+                + " | Alerts: " + (alertsOn ? "ON" : "OFF"));
+        String choice = ask("Change: 1) currency  2) default category  3) add category rule"
+                + "  4) turn alerts " + (alertsOn ? "off" : "on") + "  (empty = back): ").trim();
         switch (choice) {
             case "1" -> settings.setCurrency(ask("New currency (e.g. MDL, EUR, USD): "));
             case "2" -> settings.setDefaultCategory(ask("New default category: "));
+            case "3" -> addCategoryRule();
+            case "4" -> toggleAlerts();
             default -> {
             }
         }
     }
 
-    // FACADE + ADAPTER in use: the bank file is read by Apache Commons CSV behind the adapter
+    // CHAIN OF RESPONSIBILITY changed at runtime: the new rule is checked first
+    private void addCategoryRule() {
+        String keyword = ask("Word in the description (e.g. darwin): ").trim();
+        String category = ask("Category for it (e.g. tech): ").trim();
+        if (keyword.isEmpty() || category.isEmpty()) {
+            throw new IllegalArgumentException("Keyword and category cannot be empty.");
+        }
+        categories.addFirst(new KeywordCategoryHandler(category.toLowerCase(), keyword));
+        System.out.println("Rule added: '" + keyword + "' -> " + category.toLowerCase());
+    }
+
+    // OBSERVER changed at runtime: subscribe / unsubscribe the alerts
+    private void toggleAlerts() {
+        if (alertsOn) {
+            publisher.unsubscribe(largeExpenseAlert);
+            publisher.unsubscribe(budgetWarning);
+        } else {
+            publisher.subscribe(largeExpenseAlert);
+            publisher.subscribe(budgetWarning);
+        }
+        alertsOn = !alertsOn;
+        System.out.println("Alerts are now " + (alertsOn ? "ON" : "OFF") + ".");
+    }
+
+    // COMMAND + FACADE + ADAPTER + CHAIN in one path
     private void importStatement() {
         String path = ask("Path to bank CSV (e.g. samples/bank-statement.csv): ").trim();
-        ImportResult result = facade.importFrom(BankStatementCsvAdapter.fromFile(path));
-        System.out.println("Imported: " + result.imported());
+        ImportStatementCommand command =
+                new ImportStatementCommand(facade, BankStatementCsvAdapter.fromFile(path, categories));
+        history.execute(command);
+
+        ImportResult result = command.result();
+        System.out.println("Imported: " + result.imported() + " (undo with 9)");
         if (!result.rejected().isEmpty()) {
             System.out.println("Skipped: " + result.rejected().size());
             for (String r : result.rejected()) {

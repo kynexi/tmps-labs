@@ -1,5 +1,7 @@
 package importer.adapter;
 
+import categorization.CategoryChain;
+import categorization.CategoryRequest;
 import importer.TransactionSource;
 import model.Transaction;
 import model.TransactionBuilder;
@@ -24,7 +26,9 @@ import java.util.List;
  * ADAPTER: makes Apache Commons CSV (CSVParser / CSVRecord, code I did not write)
  * look like our TransactionSource.
  * Bank format: ';' separator, dates dd.MM.yyyy, amounts like "1 234,50",
- * separate Debit (money out) and Credit (money in) columns.
+ * separate Debit (money out) and Credit (money in) columns, no category column.
+ * The category is chosen by the CHAIN OF RESPONSIBILITY (CategoryChain), if one is given.
+ * Note: the Reader can be read only once.
  */
 public class BankStatementCsvAdapter implements TransactionSource {
     static final String DATE = "Data";
@@ -42,14 +46,25 @@ public class BankStatementCsvAdapter implements TransactionSource {
             .build();
 
     private final Reader input;
+    private final CategoryChain categories;   // may be null -> the builder's default category
 
     public BankStatementCsvAdapter(Reader input) {
+        this(input, null);
+    }
+
+    public BankStatementCsvAdapter(Reader input, CategoryChain categories) {
         this.input = input;
+        this.categories = categories;
     }
 
     public static BankStatementCsvAdapter fromFile(String path) {
+        return fromFile(path, null);
+    }
+
+    public static BankStatementCsvAdapter fromFile(String path, CategoryChain categories) {
         try {
-            return new BankStatementCsvAdapter(Files.newBufferedReader(Path.of(path), StandardCharsets.UTF_8));
+            return new BankStatementCsvAdapter(
+                    Files.newBufferedReader(Path.of(path), StandardCharsets.UTF_8), categories);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -77,11 +92,19 @@ public class BankStatementCsvAdapter implements TransactionSource {
             throw new IllegalArgumentException("Bank row " + row.getRecordNumber() + " has neither debit nor credit.");
         }
 
-        // BUILDER from Lab 1: the bank has no category, so the builder's default is used
+        TransactionType type = isExpense ? TransactionType.EXPENSE : TransactionType.INCOME;
+        double amount = parseBankAmount(amountText);
+        String description = row.get(DETAILS);
+        String category = categories == null
+                ? null
+                : categories.resolve(new CategoryRequest(description, amount, type));
+
+        // BUILDER: a null category keeps the default from AppSettings
         return new TransactionBuilder()
-                .type(isExpense ? TransactionType.EXPENSE : TransactionType.INCOME)
-                .amount(parseBankAmount(amountText))
-                .description(row.get(DETAILS))
+                .type(type)
+                .amount(amount)
+                .description(description)
+                .category(category)
                 .date(parseBankDate(row.get(DATE)))
                 .build();
     }

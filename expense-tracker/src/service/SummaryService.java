@@ -6,6 +6,7 @@ import repository.TransactionRepository;
 import model.Transaction;
 import model.TransactionType;
 
+import java.time.YearMonth;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -45,6 +46,16 @@ public class SummaryService {
         double total = 0;
         for (Transaction t : repository.findAll()) {
             if (t.getType() == type) {
+                total += t.getAmount();
+            }
+        }
+        return total;
+    }
+
+    public double getExpensesIn(YearMonth month) {
+        double total = 0;
+        for (Transaction t : repository.findAll()) {
+            if (t.getType() == TransactionType.EXPENSE && YearMonth.from(t.getDate()).equals(month)) {
                 total += t.getAmount();
             }
         }

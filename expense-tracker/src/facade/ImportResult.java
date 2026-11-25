@@ -1,6 +1,12 @@
 package facade;
 
+import model.Transaction;
+
 import java.util.List;
 
-public record ImportResult(int imported, List<String> rejected) {
+// keeps the added transactions, so an import can be undone (Command)
+public record ImportResult(List<Transaction> added, List<String> rejected) {
+    public int imported() {
+        return added.size();
+    }
 }

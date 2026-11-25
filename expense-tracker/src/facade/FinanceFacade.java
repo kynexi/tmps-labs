@@ -11,8 +11,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * FACADE: one simple entry point for import / search / export.
- * It only delegates to the subsystem; it does not calculate or store anything itself.
+ * FACADE: one simple entry point for the subsystem.
+ * It only delegates; it does not calculate or store anything itself.
+ * It is also the RECEIVER of the commands (add / remove / import).
  */
 public class FinanceFacade {
     private final TransactionService transactions;
@@ -23,27 +24,39 @@ public class FinanceFacade {
         this.summary = summary;
     }
 
-    // source (Adapter) -> service -> repository (Decorators)
+    public void add(Transaction transaction) {
+        transactions.addTransaction(transaction);
+    }
+
+    public void remove(Transaction transaction) {
+        transactions.removeTransaction(transaction);
+    }
+
+    public Transaction transactionAt(int index) {
+        return transactions.getTransaction(index);
+    }
+
+    // source (Adapter) -> service -> repository (Decorators, Observer)
     public ImportResult importFrom(TransactionSource source) {
-        int imported = 0;
+        List<Transaction> added = new ArrayList<>();
         List<String> rejected = new ArrayList<>();
         for (Transaction t : source.fetch()) {
             try {
                 transactions.addTransaction(t);
-                imported++;
+                added.add(t);
             } catch (IllegalArgumentException e) {
                 rejected.add(t.getDescription() + ": " + e.getMessage());
             }
         }
-        return new ImportResult(imported, List.copyOf(rejected));
+        return new ImportResult(List.copyOf(added), List.copyOf(rejected));
     }
 
-    // works with a single filter or a Composite group, the facade doesn't care
+    // works with a single filter or a Composite group
     public List<Transaction> search(TransactionFilter filter) {
         return transactions.filter(filter);
     }
 
-    // Composite filter -> Factory Method export (Lab 1)
+    // Composite filter -> Factory Method export
     public String exportMatching(TransactionFilter filter, ExportCreator creator, String baseName) {
         return creator.exportToFile(transactions.filter(filter), baseName);
     }
